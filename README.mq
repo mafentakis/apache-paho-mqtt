@@ -1,0 +1,48 @@
+# Apache Paho MQTT Subscriber Example
+
+This project demonstrates how to build a simple MQTT subscriber with Java 21, Maven and the [Eclipse Paho](https://www.eclipse.org/paho/) client.  A development container definition is included to provide a ready-to-use Ubuntu environment with a Mosquitto sidecar broker and the required Java tooling.
+
+## Prerequisites
+
+* Java 21
+* Apache Maven 3.9+
+* An MQTT broker (the dev container automatically starts Mosquitto alongside the workspace).
+
+## Building the project
+
+```bash
+mvn -ntp clean package
+```
+
+The build produces a runnable fat JAR at `target/java_maven_poc_mqtt_subscriber_simple-1.0.0.RELEASE-jar-with-dependencies.jar`.
+
+## Running the subscriber
+
+1. Ensure that an MQTT broker is available. When the dev container is used the `mosquitto` sidecar is started automatically and can be reached at:
+   * `tcp://mosquitto:1883` from inside the dev container
+   * `tcp://localhost:1883` from your host machine
+
+2. Launch the subscriber:
+
+    ```bash
+    java -jar target/java_maven_poc_mqtt_subscriber_simple-1.0.0.RELEASE-jar-with-dependencies.jar
+    ```
+
+   Customise the connection via JVM system properties if required:
+
+    * `-Dmqtt.broker=tcp://localhost:1883`
+    * `-Dmqtt.clientId=mqtt_subscriber_simple`
+    * `-Dmqtt.topic=mqtt_simple_topic`
+    * `-Dmqtt.qos=0`
+
+   When running inside the dev container, set `-Dmqtt.broker=tcp://mosquitto:1883` to target the bundled broker.
+
+## Publishing a test message
+
+With the dev container you can publish a message from a second terminal using the preinstalled Mosquitto clients:
+
+```bash
+mosquitto_pub -h mosquitto -t mqtt_simple_topic -m "Hello from Mosquitto"
+```
+
+From outside the dev container target `localhost` instead of `mosquitto`.  The subscriber logs the received payload and QoS using Log4j2.
