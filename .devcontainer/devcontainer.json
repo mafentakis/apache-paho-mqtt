@@ -1,5 +1,16 @@
 {
   "name": "Apache Paho MQTT Maven Dev Container",
+  "image": "mcr.microsoft.com/devcontainers/java:21",
+  "features": {
+    "ghcr.io/devcontainers/features/java:1": {
+      "version": "21",
+      "installMaven": "true"
+    },
+    "ghcr.io/devcontainers/features/docker-in-docker:2": {
+      "version": "latest",
+      "dockerDashComposeVersion": "v2"
+    }
+  },
   "workspaceFolder": "/workspace",
   "customizations": {
     "vscode": {
