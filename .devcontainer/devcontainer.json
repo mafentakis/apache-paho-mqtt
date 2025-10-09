@@ -5,12 +5,6 @@
   "workspaceFolder": "/workspace",
   "runServices": ["mosquitto"],
   "shutdownAction": "stopCompose",
-  "features": {
-    "ghcr.io/devcontainers/features/java:1": {
-      "version": "21"
-    },
-    "ghcr.io/devcontainers/features/maven:1": {}
-  },
   "postCreateCommand": "mvn -q -ntp dependency:go-offline",
   "forwardPorts": [1883],
   "portsAttributes": {

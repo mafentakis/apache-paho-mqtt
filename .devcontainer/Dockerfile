@@ -1,4 +1,4 @@
-FROM mcr.microsoft.com/devcontainers/base:ubuntu
+FROM mcr.microsoft.com/devcontainers/java:1-21-bullseye
 
 ARG DEBIAN_FRONTEND=noninteractive
 RUN apt-get update \
