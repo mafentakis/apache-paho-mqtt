@@ -1,0 +1,15 @@
+#linux / ubuntu with mosquitto
+
+apt install mosquitto
+
+systemctl enable mosquitto
+systemctl start mosquitto
+systemctl status mosquitto
+
+ps -aux | grep mosquitto
+
+netstat -tulpn
+ss -ntlp | grep LISTEN
+ss -ntlp | grep mosquitto
+
+# mosquitto must run on port 1883
