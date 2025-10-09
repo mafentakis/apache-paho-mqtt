@@ -11,7 +11,7 @@
       "dockerDashComposeVersion": "v2"
     }
   },
-  "workspaceFolder": "/workspace",
+  "workspaceFolder": "/workspaces/${localWorkspaceFolderBasename}",
   "customizations": {
     "vscode": {
       "settings": {
