@@ -1,9 +1,5 @@
 {
   "name": "Apache Paho MQTT Maven Dev Container",
-  "build": {
-    "dockerfile": "Dockerfile",
-    "context": ".."
-  },
   "workspaceFolder": "/workspace",
   "customizations": {
     "vscode": {
