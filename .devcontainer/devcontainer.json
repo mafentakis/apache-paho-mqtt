@@ -1,16 +1,12 @@
 {
   "name": "Apache Paho MQTT Maven Dev Container",
-  "dockerComposeFile": "docker-compose.yml",
-  "service": "app",
+  "build": {
+    "dockerfile": "Dockerfile",
+    "context": ".."
+  },
   "workspaceFolder": "/workspace",
-  "runServices": ["mosquitto"],
-  "shutdownAction": "stopCompose",
-  "postCreateCommand": "mvn -q -ntp dependency:go-offline",
-  "forwardPorts": [1883],
-  "portsAttributes": {
-    "1883": {
-      "label": "Mosquitto MQTT"
-    }
+  "features": {
+    "ghcr.io/devcontainers/features/docker-outside-of-docker:1": {}
   },
   "customizations": {
     "vscode": {

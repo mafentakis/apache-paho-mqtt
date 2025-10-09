@@ -1,6 +1,6 @@
 # Apache Paho MQTT Subscriber Example
 
-This project demonstrates how to build a simple MQTT subscriber with Java 21, Maven and the [Eclipse Paho](https://www.eclipse.org/paho/) client.  A development container definition is included to provide a ready-to-use Ubuntu environment with a Mosquitto sidecar broker and the required Java tooling.
+This project demonstrates how to build a simple MQTT subscriber with Java 21, Maven and the [Eclipse Paho](https://www.eclipse.org/paho/) client.  A development container definition is included to provide a ready-to-use Ubuntu environment with Docker tooling so you can launch a Mosquitto broker on demand alongside the required Java tooling.
 
 The primary workspace container is based on the `mcr.microsoft.com/devcontainers/java:1-21-bullseye` image, so both the Java 21 toolchain and Maven are available on the command line as soon as the container starts. Mosquitto CLI tools are also preinstalled for quick manual testing.
 
@@ -8,7 +8,8 @@ The primary workspace container is based on the `mcr.microsoft.com/devcontainers
 
 * Java 21
 * Apache Maven 3.9+
-* An MQTT broker (the dev container automatically starts Mosquitto alongside the workspace).
+* Docker Engine 20.10+ (required to run the Mosquitto container from inside the dev container)
+* An MQTT broker (see [Running Mosquitto in Docker](#running-mosquitto-in-docker) for a turnkey option inside the dev container)
 
 ## Building the project
 
@@ -20,9 +21,8 @@ The build produces a runnable fat JAR at `target/java_maven_poc_mqtt_subscriber_
 
 ## Running the subscriber
 
-1. Ensure that an MQTT broker is available. When the dev container is used the `mosquitto` sidecar is started automatically and can be reached at:
-   * `tcp://mosquitto:1883` from inside the dev container
-   * `tcp://localhost:1883` from your host machine
+1. Ensure that an MQTT broker is available. When using the dev container you can start Mosquitto locally with Docker by following the steps in [Running Mosquitto in Docker](#running-mosquitto-in-docker). The broker is then available at:
+   * `tcp://localhost:1883` from the dev container and your host machine
 
 2. Launch the subscriber:
 
@@ -37,14 +37,40 @@ The build produces a runnable fat JAR at `target/java_maven_poc_mqtt_subscriber_
     * `-Dmqtt.topic=mqtt_simple_topic`
     * `-Dmqtt.qos=0`
 
-   When running inside the dev container, set `-Dmqtt.broker=tcp://mosquitto:1883` to target the bundled broker.
+    When running inside the dev container, keep `-Dmqtt.broker=tcp://localhost:1883` to target the Mosquitto container you started locally.
 
 ## Publishing a test message
 
 With the dev container you can publish a message from a second terminal using the preinstalled Mosquitto clients:
 
 ```bash
-mosquitto_pub -h mosquitto -t mqtt_simple_topic -m "Hello from Mosquitto"
+mosquitto_pub -h localhost -t mqtt_simple_topic -m "Hello from Mosquitto"
 ```
 
-From outside the dev container target `localhost` instead of `mosquitto`.  The subscriber logs the received payload and QoS using Log4j2.
+From outside the dev container target `localhost` as well.  The subscriber logs the received payload and QoS using Log4j2.
+
+## Running Mosquitto in Docker
+
+The dev container includes the Docker CLI so you can run the Eclipse Mosquitto broker locally without leaving the workspace.
+
+1. Start the Docker daemon if it is not already running:
+
+   ```bash
+   sudo service docker start
+   ```
+
+   (When the dev container is attached to a remote Docker host this step may not be necessary.)
+
+2. Launch Mosquitto in the background:
+
+   ```bash
+   docker run -d --name mosquitto-dev -p 1883:1883 eclipse-mosquitto:2
+   ```
+
+3. When you are finished developing, stop and remove the container:
+
+   ```bash
+   docker rm -f mosquitto-dev
+   ```
+
+With the broker running, the sample subscriber and the `mosquitto_pub` CLI can both target `localhost` on port `1883`.
