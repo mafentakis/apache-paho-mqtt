@@ -39,41 +39,48 @@ The build produces a runnable fat JAR at `target/java_maven_poc_mqtt_subscriber_
 
     When running inside the dev container, keep `-Dmqtt.broker=tcp://localhost:1883` to target the Mosquitto broker you started locally.
 
-## Publishing a test message
-
-With the dev container you can publish a message from a second terminal using the preinstalled Mosquitto clients (after the broker is started manually on the host):
-
-```bash
-mosquitto_pub -h localhost -t mqtt_simple_topic -m "Hello from Mosquitto"
-```
 
 From outside the dev container target `localhost` as well.  The subscriber logs the received payload and QoS using Log4j2.
 
-### Testing pub/sub flow
-1. Launch Mosquitto in the background:
+## Running Mosquitto manually
+
+The dev container does not manage or start Mosquitto for you. Start the broker on your host machine before attaching to the dev container (or from another terminal on the host).
+
+### Quick Start with Docker (Recommended)
+
+**Important:** Mosquitto 2.x requires explicit configuration to allow connections. A `mosquitto.conf` file is provided in the repository.
+
+1. Launch Mosquitto with the provided configuration:
 
    ```bash
-   docker run -d --name mosquitto-dev -p 1883:1883 eclipse-mosquitto:2
+   docker run -d --name mosquitto-dev -p 1883:1883 -v ${PWD}/mosquitto.conf:/mosquitto/config/mosquitto.conf eclipse-mosquitto:2
    ```
 
+2. Verify it's running:
 
-2. **Terminal 1** - Start subscriber (keeps running):
    ```bash
-   docker exec -it mosquitto-dev mosquitto_sub -h localhost -t mqtt_simple_topic
+   docker logs mosquitto-dev
    ```
 
-3**Terminal 2** - Publish a message:
-   ```bash
-   docker exec mosquitto-dev mosquitto_pub -h localhost -t mqtt_simple_topic -m "Hello from Mosquitto"
-   ```
+   You should see: `mosquitto version 2.0.x running`
 
-
-2. When you are finished developing, stop and remove the container:
+3. When you are finished developing, stop and remove the container:
 
    ```bash
    docker rm -f mosquitto-dev
    ```
 
+### Testing pub/sub flow
+
+1. **Terminal 1** - Start subscriber (keeps running):
+   ```bash
+   docker exec -it mosquitto-dev mosquitto_sub -h localhost -t mqtt_simple_topic
+   ```
+
+2. **Terminal 2** - Publish a message:
+   ```bash
+   docker exec mosquitto-dev mosquitto_pub -h localhost -t mqtt_simple_topic -m "Hello from Mosquitto"
+   ```
 
 You should see the message appear in Terminal 1.
 
@@ -82,4 +89,56 @@ You should see the message appear in Terminal 1.
 - Subscribe to all topics: `mosquitto_sub -h localhost -t '#'`
 - Subscribe with verbose output: `mosquitto_sub -h localhost -t mqtt_simple_topic -v`
 - Shell into Mosquitto container: `docker exec -it mosquitto-dev /bin/sh`
+
+## Troubleshooting
+
+### Connection Refused or Connection Lost Errors
+
+If you see errors like:
+```
+org.eclipse.paho.client.mqttv3.MqttException: Connection lost
+Caused by: java.io.EOFException
+```
+
+**Common causes and solutions:**
+
+1. **Mosquitto is not running**
+   ```bash
+   # Check if container is running
+   docker ps | grep mosquitto
+
+   # If not, start it with the config file
+   docker run -d --name mosquitto-dev -p 1883:1883 -v ${PWD}/mosquitto.conf:/mosquitto/config/mosquitto.conf eclipse-mosquitto:2
+   ```
+
+2. **Mosquitto is in "local only mode"**
+   - Check the logs: `docker logs mosquitto-dev`
+   - If you see "Starting in local only mode", the broker needs the `mosquitto.conf` file
+   - Restart with: `docker rm -f mosquitto-dev` then use the command above
+
+3. **Port 1883 is already in use**
+   ```bash
+   # Check what's using the port
+   netstat -an | grep 1883
+   # or on Linux/Mac
+   lsof -i :1883
+   ```
+
+4. **Network connectivity from dev container**
+   - If running inside a dev container, ensure the broker is accessible
+   - Try connecting to `host.docker.internal` instead of `localhost`:
+     ```bash
+     java -Dmqtt.broker=tcp://host.docker.internal:1883 -jar target/...jar
+     ```
+
+### Testing Broker Connectivity
+
+Quick test to verify the broker is working:
+```bash
+# This should complete without errors
+mosquitto_pub -h localhost -p 1883 -t test -m "hello"
+
+# Listen for the test message
+mosquitto_sub -h localhost -p 1883 -t test
+```
 
