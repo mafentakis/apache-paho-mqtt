@@ -49,17 +49,24 @@ mosquitto_pub -h localhost -t mqtt_simple_topic -m "Hello from Mosquitto"
 
 From outside the dev container target `localhost` as well.  The subscriber logs the received payload and QoS using Log4j2.
 
-## Running Mosquitto manually
-
-The dev container does not manage or start Mosquitto for you. Start the broker on your host machine before attaching to the dev container (or from another terminal on the host). Two common options are shown below; pick whichever fits your environment best.
-
-### Option 1: Run Mosquitto with Docker (host machine)
-
+### Testing pub/sub flow
 1. Launch Mosquitto in the background:
 
    ```bash
    docker run -d --name mosquitto-dev -p 1883:1883 eclipse-mosquitto:2
    ```
+
+
+2. **Terminal 1** - Start subscriber (keeps running):
+   ```bash
+   docker exec -it mosquitto-dev mosquitto_sub -h localhost -t mqtt_simple_topic
+   ```
+
+3**Terminal 2** - Publish a message:
+   ```bash
+   docker exec mosquitto-dev mosquitto_pub -h localhost -t mqtt_simple_topic -m "Hello from Mosquitto"
+   ```
+
 
 2. When you are finished developing, stop and remove the container:
 
@@ -67,13 +74,12 @@ The dev container does not manage or start Mosquitto for you. Start the broker o
    docker rm -f mosquitto-dev
    ```
 
-### Option 2: Run Mosquitto from a local installation
 
-1. Install Mosquitto using your platform's package manager (for example, `apt install mosquitto` on Debian/Ubuntu or `brew install mosquitto` on macOS).
-2. Start the broker:
+You should see the message appear in Terminal 1.
 
-   ```bash
-   mosquitto -v
-   ```
+### Other useful commands
 
-Regardless of which option you choose, the subscriber and `mosquitto_pub` CLI can both target `localhost` on port `1883` once the broker is running.
+- Subscribe to all topics: `mosquitto_sub -h localhost -t '#'`
+- Subscribe with verbose output: `mosquitto_sub -h localhost -t mqtt_simple_topic -v`
+- Shell into Mosquitto container: `docker exec -it mosquitto-dev /bin/sh`
+
