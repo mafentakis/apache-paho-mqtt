@@ -170,6 +170,8 @@ IBM MQ is an enterprise-grade messaging platform that includes MQTT support via 
 
 ### Testing pub/sub flow with IBM MQ
 
+#### Using your Java subscriber
+
 1. **Terminal 1** - Start your Java subscriber:
    ```bash
    java -jar target/java_maven_poc_mqtt_subscriber_simple-1.0.0.RELEASE-jar-with-dependencies.jar
@@ -189,6 +191,39 @@ IBM MQ is an enterprise-grade messaging platform that includes MQTT support via 
 
 You should see the message appear in Terminal 1 (Java subscriber logs).
 
+#### Using IBM MQ command-line tools
+
+1. **Terminal 1** - Subscribe using IBM MQ's amqssub (keeps running):
+   ```bash
+   docker exec -it ibmmq-dev /opt/mqm/samp/bin/amqssub mqtt_simple_topic QM1
+   ```
+
+2. **Terminal 2** - Publish a message:
+   ```bash
+   docker exec ibmmq-dev bash -c "echo 'Hello from IBM MQ CLI' | /opt/mqm/samp/bin/amqspub mqtt_simple_topic QM1"
+   ```
+
+You should see the message appear in Terminal 1.
+
+**Note**: If you get error `2058`, the queue manager may not be running. Check with:
+```bash
+docker exec ibmmq-dev dspmq
+```
+
+#### Using mosquitto CLI tools
+
+1. **Terminal 1** - Subscribe using mosquitto_sub (keeps running):
+   ```bash
+   mosquitto_sub -h localhost -p 1883 -t mqtt_simple_topic
+   ```
+
+2. **Terminal 2** - Publish a message:
+   ```bash
+   mosquitto_pub -h localhost -p 1883 -t mqtt_simple_topic -m "Hello from Mosquitto CLI"
+   ```
+
+You should see the message appear in Terminal 1.
+
 ### IBM MQ MQTT Configuration Details
 
 The MQTT service (`SYSTEM.MQTT.SERVICE`) runs the MQ Telemetry (MQXR) service which:
@@ -207,31 +242,80 @@ The MQTT service (`SYSTEM.MQTT.SERVICE`) runs the MQ Telemetry (MQXR) service wh
   ```bash
   docker exec ibmmq-dev dspmq
   ```
+  Expected output: `QMNAME(QM1)                                               STATUS(Running)`
 
 - Display MQTT service status:
   ```bash
-  docker exec ibmmq-dev echo "DISPLAY SERVICE(SYSTEM.MQTT.SERVICE)" | runmqsc QM1
+  docker exec ibmmq-dev bash -c "echo 'DISPLAY SERVICE(SYSTEM.MQTT.SERVICE)' | runmqsc QM1"
   ```
+  Look for `SERVSTATUS(RUNNING)` in the output.
 
-- View all channels (to find MQTT-related channels):
+- View all channels:
   ```bash
-  docker exec ibmmq-dev echo "DISPLAY CHANNEL(*)" | runmqsc QM1
+  docker exec ibmmq-dev bash -c "echo 'DISPLAY CHANNEL(*)' | runmqsc QM1"
   ```
 
 - View listener status (MQTT listens on port 1883):
   ```bash
-  docker exec ibmmq-dev echo "DISPLAY LISTENER(*)" | runmqsc QM1
+  docker exec ibmmq-dev bash -c "echo 'DISPLAY LISTENER(*)' | runmqsc QM1"
   ```
 
 - View MQTT topics:
   ```bash
-  docker exec ibmmq-dev echo "DISPLAY TOPIC(*)" | runmqsc QM1
+  docker exec ibmmq-dev bash -c "echo 'DISPLAY TOPIC(*)' | runmqsc QM1"
+  ```
+
+- View MQTT service logs:
+  ```bash
+  docker exec ibmmq-dev cat /var/mqm/errors/mqxr.stdout
+  docker exec ibmmq-dev cat /var/mqm/errors/mqxr.stderr
   ```
 
 - Shell into IBM MQ container:
   ```bash
   docker exec -it ibmmq-dev /bin/bash
   ```
+
+### Troubleshooting IBM MQ
+
+#### Error 2058 (MQRC_Q_MGR_NAME_ERROR)
+
+If you see `MQCONNX ended with reason code 2058`:
+
+1. Check if the queue manager is running:
+   ```bash
+   docker exec ibmmq-dev dspmq
+   ```
+
+2. Verify the container is fully started:
+   ```bash
+   docker logs ibmmq-dev | grep "Started web server"
+   ```
+
+3. Check if MQTT service is running:
+   ```bash
+   docker exec ibmmq-dev bash -c "echo 'DISPLAY SERVICE(SYSTEM.MQTT.SERVICE)' | runmqsc QM1"
+   ```
+
+4. Restart the container if needed:
+   ```bash
+   docker restart ibmmq-dev
+   docker logs -f ibmmq-dev
+   ```
+
+#### Connection Refused on Port 1883
+
+1. Verify MQTT service is running (see above)
+
+2. Check if port 1883 is exposed:
+   ```bash
+   docker port ibmmq-dev
+   ```
+
+3. Test connectivity:
+   ```bash
+   mosquitto_pub -h localhost -p 1883 -t test -m "hello"
+   ```
 
 ---
 
