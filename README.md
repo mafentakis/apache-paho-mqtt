@@ -115,11 +115,9 @@ You should see the message appear in Terminal 1 (Java subscriber logs).
 
 IBM MQ is an enterprise-grade messaging platform that includes MQTT support via its telemetry service. This allows you to use the same Eclipse Paho MQTT client to connect to IBM MQ.
 
-**Important:** MQTT configuration files are provided in the `ibmmq/` directory to enable MQTT support automatically.
+**Important:** MQTT configuration files are provided in the `ibmmq/` directory. See `ibmmq/README.md` for detailed documentation.
 
-### Option 1: Automatic Configuration (Recommended)
-
-Build a custom IBM MQ image with MQTT pre-configured:
+### Quick Start
 
 1. Build the IBM MQ image with MQTT enabled:
 
@@ -154,6 +152,12 @@ Build a custom IBM MQ image with MQTT pre-configured:
    java -jar target/java_maven_poc_mqtt_subscriber_simple-1.0.0.RELEASE-jar-with-dependencies.jar
    ```
 
+5. When finished, cleanup:
+
+   ```bash
+   docker rm -f ibmmq-dev
+   ```
+
 **Ports exposed:**
 - `1883`: MQTT (same as Mosquitto)
 - `1414`: IBM MQ native protocol
@@ -164,59 +168,6 @@ Build a custom IBM MQ image with MQTT pre-configured:
 - Username: `admin`
 - Password: `passw0rd`
 
-**Cleanup:**
-```bash
-docker rm -f ibmmq-dev
-```
-
----
-
-### Option 2: Manual Configuration
-
-If you prefer not to build a custom image:
-
-1. Launch IBM MQ Developer Edition with MQTT configuration:
-
-   ```bash
-   docker run -d --name ibmmq-dev \
-     -p 1883:1883 \
-     -p 1414:1414 \
-     -p 9443:9443 \
-     -e LICENSE=accept \
-     -e MQ_QMGR_NAME=QM1 \
-     -e MQ_APP_PASSWORD=passw0rd \
-     -v ${PWD}/ibmmq/ibmmq-mqtt.mqsc:/etc/mqm/ibmmq-mqtt.mqsc \
-     icr.io/ibm-messaging/mq:latest
-   ```
-
-2. Wait for IBM MQ to start:
-
-   ```bash
-   docker logs ibmmq-dev
-   ```
-
-   Wait until you see: `Started web server`
-
-3. Apply the MQTT configuration:
-
-   ```bash
-   docker exec ibmmq-dev bash -c "cat /etc/mqm/ibmmq-mqtt.mqsc | runmqsc QM1"
-   ```
-
-4. Verify MQTT service is running:
-
-   ```bash
-   docker exec ibmmq-dev bash -c "echo 'DISPLAY SERVICE(SYSTEM.MQTT.SERVICE)' | runmqsc QM1"
-   ```
-
-   Look for `SERVSTATUS(RUNNING)` in the output.
-
-5. Cleanup:
-
-   ```bash
-   docker rm -f ibmmq-dev
-   ```
-
 ### Testing pub/sub flow with IBM MQ
 
 1. **Terminal 1** - Start your Java subscriber:
@@ -224,71 +175,19 @@ If you prefer not to build a custom image:
    java -jar target/java_maven_poc_mqtt_subscriber_simple-1.0.0.RELEASE-jar-with-dependencies.jar
    ```
 
-2. **Terminal 2** - Publish a message to the topic. Choose one of these methods:
+2. **Terminal 2** - Publish a message to the topic:
 
-   **Option A: Using IBM MQ's amqspub command (native MQ)**
+   **Option A: Using IBM MQ's amqspub command (simplest)**
    ```bash
    docker exec ibmmq-dev bash -c "echo 'Hello from IBM MQ' | /opt/mqm/samp/bin/amqspub mqtt_simple_topic QM1"
    ```
 
-   **Option B: Using IBM MQ's MQTT sample publisher**
-   ```bash
-   docker exec ibmmq-dev bash -c "/opt/mqm/samp/bin/amqspub -m 'Hello from IBM MQ MQTT' -t mqtt_simple_topic -h localhost -p 1883"
-   ```
-
-   **Option C: Using mosquitto_pub from inside the container**
-
-   First, install mosquitto-clients in the IBM MQ container:
-   ```bash
-   docker exec -u root ibmmq-dev bash -c "microdnf install -y mosquitto && microdnf clean all"
-   ```
-
-   Then publish:
-   ```bash
-   docker exec ibmmq-dev mosquitto_pub -h localhost -p 1883 -t mqtt_simple_topic -m "Hello from IBM MQ via Mosquitto"
-   ```
-
-   **Option D: Using mosquitto_pub from your host (if installed)**
+   **Option B: Using mosquitto_pub from your host (if installed)**
    ```bash
    mosquitto_pub -h localhost -p 1883 -t mqtt_simple_topic -m "Hello from IBM MQ"
    ```
 
-   **Option E: Using Python script inside container**
-   ```bash
-   docker exec ibmmq-dev bash -c "cat > /tmp/mqtt_pub.py << 'PYEOF'
-import socket
-import time
-
-# Simple MQTT CONNECT and PUBLISH
-sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-sock.connect(('localhost', 1883))
-
-# MQTT CONNECT packet
-connect = bytearray([0x10, 0x10, 0x00, 0x04, 0x4d, 0x51, 0x54, 0x54, 0x04, 0x02, 0x00, 0x3c, 0x00, 0x04, 0x74, 0x65, 0x73, 0x74])
-sock.send(connect)
-time.sleep(0.1)
-
-# MQTT PUBLISH packet for topic 'mqtt_simple_topic' with message 'Hello from IBM MQ Python'
-topic = b'mqtt_simple_topic'
-message = b'Hello from IBM MQ Python'
-publish = bytearray([0x30])  # PUBLISH
-remaining_length = 2 + len(topic) + len(message)
-publish.append(remaining_length)
-publish.extend(len(topic).to_bytes(2, 'big'))
-publish.extend(topic)
-publish.extend(message)
-sock.send(publish)
-time.sleep(0.1)
-
-sock.close()
-print('Message published')
-PYEOF
-python3 /tmp/mqtt_pub.py"
-   ```
-
 You should see the message appear in Terminal 1 (Java subscriber logs).
-
-**Recommended**: Use Option A (amqspub) or Option D (mosquitto_pub from host) for simplicity.
 
 ### IBM MQ MQTT Configuration Details
 
