@@ -8,8 +8,10 @@ The primary workspace container is based on the `mcr.microsoft.com/devcontainers
 
 * Java 21
 * Apache Maven 3.9+
-* Docker Engine 20.10+ (on your host machine if you choose to run Mosquitto with Docker)
-* An MQTT broker (see [Running Mosquitto manually](#running-mosquitto-manually) for quick setup instructions)
+* Docker Engine 20.10+ (on your host machine if you choose to run an MQTT broker with Docker)
+* An MQTT broker - choose one:
+  * [Mosquitto](#running-mosquitto-with-docker) (lightweight, MQTT-only)
+  * [IBM MQ](#running-ibm-mq-with-docker) (enterprise messaging with MQTT support)
 
 ## Building the project
 
@@ -21,8 +23,9 @@ The build produces a runnable fat JAR at `target/java_maven_poc_mqtt_subscriber_
 
 ## Running the subscriber
 
-1. Ensure that an MQTT broker is available. Start the broker manually on your host machine before attaching to the dev container. The default configuration below exposes Mosquitto at:
-   * `tcp://localhost:1883` from both the dev container and your host machine
+1. Ensure that an MQTT broker is available. Start the broker manually on your host machine before attaching to the dev container:
+   * **Mosquitto**: `tcp://localhost:1883` (default)
+   * **IBM MQ**: `tcp://localhost:1883` (MQTT channel)
 
 2. Launch the subscriber:
 
@@ -32,19 +35,35 @@ The build produces a runnable fat JAR at `target/java_maven_poc_mqtt_subscriber_
 
    Customise the connection via JVM system properties if required:
 
-    * `-Dmqtt.broker=tcp://localhost:1883`
+    * `-Dmqtt.broker=tcp://localhost:1883` (default for both Mosquitto and IBM MQ)
     * `-Dmqtt.clientId=mqtt_subscriber_simple`
     * `-Dmqtt.topic=mqtt_simple_topic`
     * `-Dmqtt.qos=0`
 
-    When running inside the dev container, keep `-Dmqtt.broker=tcp://localhost:1883` to target the Mosquitto broker you started locally.
+   **Examples:**
 
+   ```bash
+   # Connect to Mosquitto (default)
+   java -jar target/java_maven_poc_mqtt_subscriber_simple-1.0.0.RELEASE-jar-with-dependencies.jar
 
-From outside the dev container target `localhost` as well.  The subscriber logs the received payload and QoS using Log4j2.
+   # Connect to IBM MQ (same port, different broker)
+   java -jar target/java_maven_poc_mqtt_subscriber_simple-1.0.0.RELEASE-jar-with-dependencies.jar
 
-## Running Mosquitto manually
+   # Connect to IBM MQ with custom topic
+   java -Dmqtt.topic=dev/test -jar target/java_maven_poc_mqtt_subscriber_simple-1.0.0.RELEASE-jar-with-dependencies.jar
+   ```
 
-The dev container does not manage or start Mosquitto for you. Start the broker on your host machine before attaching to the dev container (or from another terminal on the host).
+From outside the dev container target `localhost` as well. The subscriber logs the received payload and QoS using Log4j2.
+
+## MQTT Broker Options
+
+Choose one of the following MQTT brokers. Both work with the same Java subscriber application without code changes.
+
+---
+
+## Running Mosquitto with Docker
+
+Mosquitto is a lightweight, open-source MQTT broker ideal for development and testing.
 
 ### Quick Start with Docker (Recommended)
 
@@ -70,25 +89,123 @@ The dev container does not manage or start Mosquitto for you. Start the broker o
    docker rm -f mosquitto-dev
    ```
 
-### Testing pub/sub flow
+### Testing pub/sub flow with Mosquitto
 
-1. **Terminal 1** - Start subscriber (keeps running):
+1. **Terminal 1** - Start your Java subscriber:
    ```bash
-   docker exec -it mosquitto-dev mosquitto_sub -h localhost -t mqtt_simple_topic
+   java -jar target/java_maven_poc_mqtt_subscriber_simple-1.0.0.RELEASE-jar-with-dependencies.jar
    ```
 
-2. **Terminal 2** - Publish a message:
+2. **Terminal 2** - Publish a message using Mosquitto CLI:
    ```bash
    docker exec mosquitto-dev mosquitto_pub -h localhost -t mqtt_simple_topic -m "Hello from Mosquitto"
    ```
 
-You should see the message appear in Terminal 1.
+You should see the message appear in Terminal 1 (Java subscriber logs).
 
-### Other useful commands
+### Other useful Mosquitto commands
 
 - Subscribe to all topics: `mosquitto_sub -h localhost -t '#'`
 - Subscribe with verbose output: `mosquitto_sub -h localhost -t mqtt_simple_topic -v`
 - Shell into Mosquitto container: `docker exec -it mosquitto-dev /bin/sh`
+
+---
+
+## Running IBM MQ with Docker
+
+IBM MQ is an enterprise-grade messaging platform that includes MQTT support via its telemetry channel. This allows you to use the same Eclipse Paho MQTT client to connect to IBM MQ.
+
+### Quick Start with Docker
+
+1. Launch IBM MQ Developer Edition with MQTT enabled:
+
+   ```bash
+   docker run -d --name ibmmq-dev \
+     -p 1883:1883 \
+     -p 9443:9443 \
+     -e LICENSE=accept \
+     -e MQ_QMGR_NAME=QM1 \
+     -e MQ_APP_PASSWORD=passw0rd \
+     -e MQ_ENABLE_METRICS=true \
+     icr.io/ibm-messaging/mq:latest
+   ```
+
+   **Ports exposed:**
+   - `1883`: MQTT (same as Mosquitto)
+   - `9443`: IBM MQ Web Console (https://localhost:9443/ibmmq/console)
+
+2. Verify it's running:
+
+   ```bash
+   docker logs ibmmq-dev
+   ```
+
+   Wait until you see: `Started web server`
+
+3. Access the IBM MQ Web Console (optional):
+   - URL: https://localhost:9443/ibmmq/console
+   - Username: `admin`
+   - Password: `passw0rd`
+
+4. When you are finished developing, stop and remove the container:
+
+   ```bash
+   docker rm -f ibmmq-dev
+   ```
+
+### Testing pub/sub flow with IBM MQ
+
+1. **Terminal 1** - Start your Java subscriber:
+   ```bash
+   java -jar target/java_maven_poc_mqtt_subscriber_simple-1.0.0.RELEASE-jar-with-dependencies.jar
+   ```
+
+2. **Terminal 2** - Publish a message using IBM MQ's sample MQTT publisher:
+   ```bash
+   docker exec ibmmq-dev /opt/mqm/samp/bin/amqspub mqtt_simple_topic QM1 <<EOF
+   Hello from IBM MQ
+   EOF
+   ```
+
+   Or use mosquitto_pub if you have it installed locally:
+   ```bash
+   mosquitto_pub -h localhost -p 1883 -t mqtt_simple_topic -m "Hello from IBM MQ"
+   ```
+
+You should see the message appear in Terminal 1 (Java subscriber logs).
+
+### IBM MQ MQTT Configuration Details
+
+IBM MQ automatically creates an MQTT channel on port 1883 when started with the developer image. The configuration includes:
+
+- **Queue Manager**: QM1
+- **MQTT Port**: 1883 (same as Mosquitto)
+- **Authentication**: Anonymous connections allowed in dev mode
+- **Topics**: IBM MQ automatically maps MQTT topics to MQ topics
+
+### Useful IBM MQ commands
+
+- View queue manager status:
+  ```bash
+  docker exec ibmmq-dev dspmq
+  ```
+
+- Display MQTT service status:
+  ```bash
+  docker exec ibmmq-dev echo "DISPLAY SERVICE(SYSTEM.MQTT.SERVICE)" | runmqsc QM1
+  ```
+
+- View MQTT channel status:
+  ```bash
+  docker exec ibmmq-dev echo "DISPLAY CHANNEL(SYSTEM.DEF.MQTT)" | runmqsc QM1
+  ```
+
+- Shell into IBM MQ container:
+  ```bash
+  docker exec -it ibmmq-dev /bin/bash
+  ```
+
+---
 
 ## Troubleshooting
 
