@@ -113,28 +113,83 @@ You should see the message appear in Terminal 1 (Java subscriber logs).
 
 ## Running IBM MQ with Docker
 
-IBM MQ is an enterprise-grade messaging platform that includes MQTT support via its telemetry channel. This allows you to use the same Eclipse Paho MQTT client to connect to IBM MQ.
+IBM MQ is an enterprise-grade messaging platform that includes MQTT support via its telemetry service. This allows you to use the same Eclipse Paho MQTT client to connect to IBM MQ.
 
-### Quick Start with Docker
+**Important:** MQTT configuration files are provided in the `ibmmq/` directory to enable MQTT support automatically.
 
-1. Launch IBM MQ Developer Edition with MQTT enabled:
+### Option 1: Automatic Configuration (Recommended)
+
+Build a custom IBM MQ image with MQTT pre-configured:
+
+1. Build the IBM MQ image with MQTT enabled:
+
+   ```bash
+   docker build -f ibmmq/Dockerfile -t ibmmq-mqtt:latest ibmmq
+   ```
+
+2. Run the container:
 
    ```bash
    docker run -d --name ibmmq-dev \
      -p 1883:1883 \
+     -p 1414:1414 \
      -p 9443:9443 \
      -e LICENSE=accept \
      -e MQ_QMGR_NAME=QM1 \
      -e MQ_APP_PASSWORD=passw0rd \
-     -e MQ_ENABLE_METRICS=true \
+     ibmmq-mqtt:latest
+   ```
+
+3. Wait for IBM MQ to start and auto-configure MQTT (check logs):
+
+   ```bash
+   docker logs -f ibmmq-dev
+   ```
+
+   Wait until you see: `IBM MQ with MQTT is ready on port 1883`
+
+4. Your Java subscriber can now connect immediately:
+
+   ```bash
+   java -jar target/java_maven_poc_mqtt_subscriber_simple-1.0.0.RELEASE-jar-with-dependencies.jar
+   ```
+
+**Ports exposed:**
+- `1883`: MQTT (same as Mosquitto)
+- `1414`: IBM MQ native protocol
+- `9443`: IBM MQ Web Console (https://localhost:9443/ibmmq/console)
+
+**Web Console Access:**
+- URL: https://localhost:9443/ibmmq/console
+- Username: `admin`
+- Password: `passw0rd`
+
+**Cleanup:**
+```bash
+docker rm -f ibmmq-dev
+```
+
+---
+
+### Option 2: Manual Configuration
+
+If you prefer not to build a custom image:
+
+1. Launch IBM MQ Developer Edition with MQTT configuration:
+
+   ```bash
+   docker run -d --name ibmmq-dev \
+     -p 1883:1883 \
+     -p 1414:1414 \
+     -p 9443:9443 \
+     -e LICENSE=accept \
+     -e MQ_QMGR_NAME=QM1 \
+     -e MQ_APP_PASSWORD=passw0rd \
+     -v ${PWD}/ibmmq/ibmmq-mqtt.mqsc:/etc/mqm/ibmmq-mqtt.mqsc \
      icr.io/ibm-messaging/mq:latest
    ```
 
-   **Ports exposed:**
-   - `1883`: MQTT (same as Mosquitto)
-   - `9443`: IBM MQ Web Console (https://localhost:9443/ibmmq/console)
-
-2. Verify it's running:
+2. Wait for IBM MQ to start:
 
    ```bash
    docker logs ibmmq-dev
@@ -142,12 +197,21 @@ IBM MQ is an enterprise-grade messaging platform that includes MQTT support via 
 
    Wait until you see: `Started web server`
 
-3. Access the IBM MQ Web Console (optional):
-   - URL: https://localhost:9443/ibmmq/console
-   - Username: `admin`
-   - Password: `passw0rd`
+3. Apply the MQTT configuration:
 
-4. When you are finished developing, stop and remove the container:
+   ```bash
+   docker exec ibmmq-dev bash -c "cat /etc/mqm/ibmmq-mqtt.mqsc | runmqsc QM1"
+   ```
+
+4. Verify MQTT service is running:
+
+   ```bash
+   docker exec ibmmq-dev bash -c "echo 'DISPLAY SERVICE(SYSTEM.MQTT.SERVICE)' | runmqsc QM1"
+   ```
+
+   Look for `SERVSTATUS(RUNNING)` in the output.
+
+5. Cleanup:
 
    ```bash
    docker rm -f ibmmq-dev
@@ -160,28 +224,83 @@ IBM MQ is an enterprise-grade messaging platform that includes MQTT support via 
    java -jar target/java_maven_poc_mqtt_subscriber_simple-1.0.0.RELEASE-jar-with-dependencies.jar
    ```
 
-2. **Terminal 2** - Publish a message using IBM MQ's sample MQTT publisher:
+2. **Terminal 2** - Publish a message to the topic. Choose one of these methods:
+
+   **Option A: Using IBM MQ's amqspub command (native MQ)**
    ```bash
-   docker exec ibmmq-dev /opt/mqm/samp/bin/amqspub mqtt_simple_topic QM1 <<EOF
-   Hello from IBM MQ
-   EOF
+   docker exec ibmmq-dev bash -c "echo 'Hello from IBM MQ' | /opt/mqm/samp/bin/amqspub mqtt_simple_topic QM1"
    ```
 
-   Or use mosquitto_pub if you have it installed locally:
+   **Option B: Using IBM MQ's MQTT sample publisher**
+   ```bash
+   docker exec ibmmq-dev bash -c "/opt/mqm/samp/bin/amqspub -m 'Hello from IBM MQ MQTT' -t mqtt_simple_topic -h localhost -p 1883"
+   ```
+
+   **Option C: Using mosquitto_pub from inside the container**
+
+   First, install mosquitto-clients in the IBM MQ container:
+   ```bash
+   docker exec -u root ibmmq-dev bash -c "microdnf install -y mosquitto && microdnf clean all"
+   ```
+
+   Then publish:
+   ```bash
+   docker exec ibmmq-dev mosquitto_pub -h localhost -p 1883 -t mqtt_simple_topic -m "Hello from IBM MQ via Mosquitto"
+   ```
+
+   **Option D: Using mosquitto_pub from your host (if installed)**
    ```bash
    mosquitto_pub -h localhost -p 1883 -t mqtt_simple_topic -m "Hello from IBM MQ"
    ```
 
+   **Option E: Using Python script inside container**
+   ```bash
+   docker exec ibmmq-dev bash -c "cat > /tmp/mqtt_pub.py << 'PYEOF'
+import socket
+import time
+
+# Simple MQTT CONNECT and PUBLISH
+sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+sock.connect(('localhost', 1883))
+
+# MQTT CONNECT packet
+connect = bytearray([0x10, 0x10, 0x00, 0x04, 0x4d, 0x51, 0x54, 0x54, 0x04, 0x02, 0x00, 0x3c, 0x00, 0x04, 0x74, 0x65, 0x73, 0x74])
+sock.send(connect)
+time.sleep(0.1)
+
+# MQTT PUBLISH packet for topic 'mqtt_simple_topic' with message 'Hello from IBM MQ Python'
+topic = b'mqtt_simple_topic'
+message = b'Hello from IBM MQ Python'
+publish = bytearray([0x30])  # PUBLISH
+remaining_length = 2 + len(topic) + len(message)
+publish.append(remaining_length)
+publish.extend(len(topic).to_bytes(2, 'big'))
+publish.extend(topic)
+publish.extend(message)
+sock.send(publish)
+time.sleep(0.1)
+
+sock.close()
+print('Message published')
+PYEOF
+python3 /tmp/mqtt_pub.py"
+   ```
+
 You should see the message appear in Terminal 1 (Java subscriber logs).
+
+**Recommended**: Use Option A (amqspub) or Option D (mosquitto_pub from host) for simplicity.
 
 ### IBM MQ MQTT Configuration Details
 
-IBM MQ automatically creates an MQTT channel on port 1883 when started with the developer image. The configuration includes:
+The MQTT service (`SYSTEM.MQTT.SERVICE`) runs the MQ Telemetry (MQXR) service which:
 
 - **Queue Manager**: QM1
 - **MQTT Port**: 1883 (same as Mosquitto)
+- **Service**: Runs `/opt/mqm/bin/runMQXRService` to handle MQTT protocol
 - **Authentication**: Anonymous connections allowed in dev mode
 - **Topics**: IBM MQ automatically maps MQTT topics to MQ topics
+
+**Note**: The MQTT service must be explicitly defined and started (as shown above) - it's not enabled by default in the IBM MQ Docker image.
 
 ### Useful IBM MQ commands
 
@@ -195,9 +314,19 @@ IBM MQ automatically creates an MQTT channel on port 1883 when started with the 
   docker exec ibmmq-dev echo "DISPLAY SERVICE(SYSTEM.MQTT.SERVICE)" | runmqsc QM1
   ```
 
-- View MQTT channel status:
+- View all channels (to find MQTT-related channels):
   ```bash
-  docker exec ibmmq-dev echo "DISPLAY CHANNEL(SYSTEM.DEF.MQTT)" | runmqsc QM1
+  docker exec ibmmq-dev echo "DISPLAY CHANNEL(*)" | runmqsc QM1
+  ```
+
+- View listener status (MQTT listens on port 1883):
+  ```bash
+  docker exec ibmmq-dev echo "DISPLAY LISTENER(*)" | runmqsc QM1
+  ```
+
+- View MQTT topics:
+  ```bash
+  docker exec ibmmq-dev echo "DISPLAY TOPIC(*)" | runmqsc QM1
   ```
 
 - Shell into IBM MQ container:

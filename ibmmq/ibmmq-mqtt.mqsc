@@ -1,0 +1,27 @@
+* IBM MQ MQTT Configuration
+* This file configures the MQTT Telemetry service for IBM MQ
+* to enable MQTT connections on port 1883
+
+* Define the MQTT Telemetry Service
+DEFINE SERVICE(SYSTEM.MQTT.SERVICE) +
+  CONTROL(QMGR) +
+  SERVTYPE(SERVER) +
+  STARTCMD('/opt/mqm/bin/runMQXRService') +
+  STARTARG('-m QM1') +
+  STOPCMD('/opt/mqm/bin/endmqxr') +
+  STOPARG('-m QM1') +
+  STDOUT('/var/mqm/errors/mqxr.stdout') +
+  STDERR('/var/mqm/errors/mqxr.stderr')
+
+* Start the MQTT Service
+START SERVICE(SYSTEM.MQTT.SERVICE)
+
+* Define a local queue for MQTT retained messages (optional)
+DEFINE QLOCAL(SYSTEM.MQTT.TRANSMIT.QUEUE) +
+  DEFPSIST(YES) +
+  MAXDEPTH(5000) +
+  REPLACE
+
+* Display service status for verification
+DISPLAY SERVICE(SYSTEM.MQTT.SERVICE)
+
